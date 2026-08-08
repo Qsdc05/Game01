@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "worker:typecheck": "tsc -p worker/tsconfig.json --noEmit",
-    "check": "npm run typecheck && npm run worker:typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm run worker:typecheck && npm test && npm run build",
+    "worker:dev": "wrangler dev --local"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
