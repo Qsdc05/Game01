@@ -68,3 +68,18 @@ npx wrangler deploy
 ## GitHub
 
 将仓库推送到 GitHub 后，`.github/workflows/validate.yml` 会在 push 和 pull request 自动执行类型检查、Worker 检查、测试和生产构建。不要提交 `.env`、Cloudflare Token、管理员密码或生产数据库信息。
+
+
+## 当前线上环境
+
+- Pages：`https://folding-museum.pages.dev`
+- Worker：`https://folding-museum-api.15770739466lfh.workers.dev`
+- D1：`folding-museum`（APAC）
+
+线上部署状态可用以下命令复核：
+
+```bash
+npx wrangler d1 migrations list folding-museum --remote
+npx wrangler deployments list
+npx wrangler pages deployment list --project-name folding-museum
+```
