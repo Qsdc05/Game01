@@ -1,6 +1,6 @@
 interface Env { DB: D1Database; ADMIN_USERNAME: string; ADMIN_PASSWORD: string; ALLOWED_ORIGIN?: string; }
 type User = { id:string; username:string };
-const origin=(request:Request,env:Env)=>{const requestOrigin=request.headers.get('Origin');return env.ALLOWED_ORIGIN && requestOrigin===env.ALLOWED_ORIGIN ? env.ALLOWED_ORIGIN : (env.ALLOWED_ORIGIN ?? requestOrigin ?? '*')};
+const origin=(request:Request,env:Env)=>{const requestOrigin=request.headers.get('Origin');return env.ALLOWED_ORIGIN ? (requestOrigin===env.ALLOWED_ORIGIN ? env.ALLOWED_ORIGIN : 'null') : (requestOrigin ?? '*')};
 const json=(body:unknown,status=200,request?:Request,env?:Env)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json','access-control-allow-origin':request&&env?origin(request,env):'*','access-control-allow-credentials':'true','vary':'Origin'}});
 const now=()=>new Date().toISOString();
 async function digest(value:string){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('')}
