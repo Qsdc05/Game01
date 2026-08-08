@@ -1,0 +1,15 @@
+export type Tile = { id: number; level: number };
+export type Mode = 'challenge' | 'free';
+export type GameState = { board: (Tile | null)[]; score: number; moves: number; chain: number; selectedCabinet: number | null; mode: Mode; seed: number; gameOver: boolean };
+
+const LEVELS = ['碎陶片','陶罐','青铜器','古币','玉佩','金面具','王冠','镇馆之宝'];
+export const tileName = (level: number) => LEVELS[Math.min(level, LEVELS.length - 1)] ?? '神秘文物';
+export const tileColor = (level: number) => ['#d8a477','#b8734e','#6d8894','#d8b85a','#72a69b','#c77478','#ae82b9','#efc35a'][level] ?? '#efc35a';
+
+function rng(seed: number) { let x = seed || 1; return () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296); }
+export function createGame(mode: Mode = 'free', seed = Date.now()): GameState { const r = rng(seed); return { board: Array.from({ length: 16 }, (_, id) => ({ id, level: Math.floor(r() * 3) })), score: 0, moves: 0, chain: 1, selectedCabinet: null, mode, seed, gameOver: false }; }
+function rotate(board: (Tile|null)[], cabinet: number, clockwise: boolean) { const out = [...board]; const row = Math.floor(cabinet / 2) * 2, col = (cabinet % 2) * 2; const cells = [row*4+col,row*4+col+1,(row+1)*4+col,(row+1)*4+col+1]; const map = clockwise ? [2,0,3,1] : [1,3,0,2]; cells.forEach((at, i) => out[at] = board[cells[map[i]]]); return out; }
+function neighbors(index: number, folded: boolean) { const r=Math.floor(index/4), c=index%4; const n:number[]=[]; if(r)n.push(index-4); if(r<3)n.push(index+4); if(c)n.push(index-1); if(c<3)n.push(index+1); if(folded && c===1)n.push(index+1); if(folded && c===2)n.push(index-1); return n; }
+function resolve(board: (Tile|null)[], folded: boolean) { const out=[...board], groups:number[][]=[]; const seen=new Set<number>(); out.forEach((tile,i)=>{ if(!tile||seen.has(i))return; const group=[i], q=[i]; seen.add(i); while(q.length){const at=q.pop()!; neighbors(at,folded).forEach(n=>{if(!seen.has(n)&&out[n]?.level===tile.level){seen.add(n);group.push(n);q.push(n)}})} if(group.length>=3)groups.push(group); }); let gained=0; groups.forEach(g=>{const level=(out[g[0]]!.level)+1; const first=g[0]; g.forEach(i=>out[i]=null); out[first]={id:out[first]?.id ?? first,level}; gained += g.length*100*level;}); return {board:out,gained,merged:groups.length}; }
+export function act(state: GameState, action: { type:'rotate'; cabinet:number; clockwise:boolean } | {type:'fold'; cabinet:number}): GameState { if(state.gameOver)return state; const board=action.type==='rotate'?rotate(state.board,action.cabinet,action.clockwise):state.board; const result=resolve(board,action.type==='fold'); const next={...state,board:result.board,score:state.score+result.gained*(result.merged?state.chain:1),chain:result.merged?state.chain+1:1,moves:state.moves+1,selectedCabinet:null}; return {...next,gameOver:next.moves>=30 || next.board.every(Boolean)}; }
+export function todaySeed(date = new Date()) { const utc8 = new Date(date.getTime()+8*3600_000); const key=utc8.toISOString().slice(0,10); return [...key].reduce((a,c)=>((a*31+c.charCodeAt(0))>>>0),7); }
