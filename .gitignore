@@ -6,3 +6,4 @@ dist
 !.env.example
 
 tsconfig.tsbuildinfo
+.dev.vars.example.tmp

@@ -18,7 +18,21 @@ npm install
 npm run dev
 ```
 
-默认前端使用同源 `/api`；本地或 Pages 独立部署时，用 `VITE_API_URL` 指向 Worker URL。若未启动 Worker，登录无法完成，这是有意的：未认证用户不能进入游戏。
+本地 API 推荐使用 Wrangler：
+
+```bash
+# 第一次使用前，把 wrangler.toml 的 database_id 替换为真实 D1 ID
+npx wrangler d1 migrations apply folding-museum --local
+npx wrangler dev
+```
+
+另开终端启动前端：
+
+```bash
+npm run dev
+```
+
+前端默认访问同源 `/api`。Pages 独立部署时配置 `VITE_API_URL` 指向 Worker URL；Worker 需要配置 `ALLOWED_ORIGIN`，否则跨域请求会被拒绝。浏览器登录依赖安全 Cookie，生产环境必须使用 HTTPS。
 
 ## Cloudflare 部署
 
@@ -39,13 +53,17 @@ npx wrangler secret put ALLOWED_ORIGIN
 npx wrangler deploy
 ```
 
-`ALLOWED_ORIGIN` 填 Pages 站点的完整 origin，例如 `https://museum.pages.dev`。生产环境必须使用 HTTPS。
+`ALLOWED_ORIGIN` 填 Pages 站点的完整 origin，例如 `https://museum.pages.dev`。不要附带路径或结尾斜杠。
 
 ### 3. 部署 Pages
 
 构建命令：`npm ci && npm run build`；输出目录：`dist`；环境变量：`VITE_API_URL=https://你的-worker域名.workers.dev`。
 
 也可以把 Pages 与 Worker 绑定为同一自定义域名，这时可不设置 `VITE_API_URL`。
+
+### 4. 首次初始化邀请码
+
+部署 Worker 后，访问 `/admin`，使用 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD` 登录并生成首批邀请码。管理员凭据只通过 Cloudflare Secrets 配置。
 
 ## GitHub
 

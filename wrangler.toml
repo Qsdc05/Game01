@@ -2,7 +2,11 @@ name = "folding-museum-api"
 main = "worker/index.ts"
 compatibility_date = "2026-08-09"
 
+# Replace this placeholder after: npx wrangler d1 create folding-museum
 [[d1_databases]]
 binding = "DB"
 database_name = "folding-museum"
 database_id = "REPLACE_WITH_DATABASE_ID"
+
+[vars]
+# For local development, use .dev.vars. Set production values with wrangler secret put.

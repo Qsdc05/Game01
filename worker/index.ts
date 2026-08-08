@@ -1,12 +1,12 @@
 interface Env { DB: D1Database; ADMIN_USERNAME: string; ADMIN_PASSWORD: string; ALLOWED_ORIGIN?: string; }
 type User = { id:string; username:string };
-const origin=(request:Request,env:Env)=>{const requestOrigin=request.headers.get('Origin');return env.ALLOWED_ORIGIN ? (requestOrigin===env.ALLOWED_ORIGIN ? env.ALLOWED_ORIGIN : 'null') : (requestOrigin ?? '*')};
+const origin=(request:Request,env:Env)=>{const requestOrigin=request.headers.get('Origin');return env.ALLOWED_ORIGIN ? (requestOrigin===env.ALLOWED_ORIGIN ? env.ALLOWED_ORIGIN : 'null') : (requestOrigin ? 'null' : '*')};
 const json=(body:unknown,status=200,request?:Request,env?:Env)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json','access-control-allow-origin':request&&env?origin(request,env):'*','access-control-allow-credentials':'true','vary':'Origin'}});
 const now=()=>new Date().toISOString();
 async function digest(value:string){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 async function passwordHash(password:string,salt:string=crypto.randomUUID()){const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new TextEncoder().encode(salt),iterations:100000,hash:'SHA-256'},key,256);return `${salt}:${[...new Uint8Array(bits)].map(x=>x.toString(16).padStart(2,'0')).join('')}`}
 async function checkPassword(password:string,stored:string){const [salt]=stored.split(':');return stored===await passwordHash(password,salt)}
-function cookie(token:string){return `session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800`}
+function cookie(token:string){return `session=${token}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=604800`}
 async function session(request:Request,env:Env):Promise<User|null>{const token=request.headers.get('Cookie')?.match(/session=([^;]+)/)?.[1];if(!token)return null;const hash=await digest(token);return await env.DB.prepare('SELECT u.id,u.username FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').bind(hash,now()).first<User>()}
 function cors(request:Request,env:Env){return {headers:{'Access-Control-Allow-Origin':origin(request,env),'Access-Control-Allow-Headers':'Content-Type,Authorization','Access-Control-Allow-Methods':'GET,POST,DELETE,OPTIONS','Access-Control-Allow-Credentials':'true','Vary':'Origin'}}}
 export default {async fetch(request:Request,env:Env){if(request.method==='OPTIONS')return new Response(null,{headers:cors(request,env).headers});const url=new URL(request.url);try{
