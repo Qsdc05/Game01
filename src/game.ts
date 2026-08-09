@@ -256,6 +256,7 @@ export function selectCabinet(state: GameState, cabinet: number): GameState {
     lastMerge: 0,
     lastGained: 0,
     lastSpawnId: null,
+    lastUnlocked: null,
     lastMessage: `已选中展柜 ${String.fromCharCode(65 + cabinet)}，现在试试旋转。`,
   };
 }
