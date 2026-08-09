@@ -83,22 +83,17 @@ function makeFreeBoard(seed: number) {
 }
 
 function makeChallengeBoard(seed: number) {
-  const random = rng(seed);
-  const board: (Tile | null)[] = Array.from({ length: 16 }, (_, id) => {
-    const filled = random() > 0.34;
-    return filled ? { id, level: Math.floor(random() * 3) } : null;
-  });
-
-  // Every daily map opens with a readable opportunity: three matching relics and a
-  // second pair nearby. The seed still changes the surrounding museum texture.
-  const pattern = Math.abs(seed) % 3;
-  const triple = pattern === 0 ? [0, 1, 4] : pattern === 1 ? [3, 7, 6] : [10, 11, 14];
-  const level = Math.abs(seed) % 2;
-  triple.forEach((index) => { board[index] = { id: index, level }; });
-  const pair = pattern === 2 ? [2, 3] : [8, 9];
-  pair.forEach((index) => { board[index] = { id: index, level: Math.min(level + 1, 2) }; });
-  board[15] = null;
-  return board;
+  // The challenge starts as a checkerboard instead of an already-complete match.
+  // Rotating a cabinet then creates the first opportunity, so the player can see
+  // why a move worked instead of winning on the first click.
+  const layouts: Array<Array<number | null>> = [
+    [0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 2, 1, 1, 0, 1, null],
+    [null, 1, 0, 1, 0, 1, 2, 0, 1, 0, 1, 0, 0, 1, 0, 1],
+    [0, 1, 0, null, 1, 0, 2, 0, 0, 1, 0, 1, 1, 0, 1, 0],
+    [1, 0, 1, 0, 0, 1, 0, 1, 1, 2, 1, 0, null, 1, 0, 1],
+  ];
+  const layout = layouts[Math.abs(seed) % layouts.length];
+  return layout.map((level, id) => level === null ? null : { id, level });
 }
 
 function snapshot(state: GameState): Snapshot {
@@ -136,7 +131,7 @@ export function createGame(mode: Mode = 'free', seed = Date.now()): GameState {
     gameOver: false,
     highestLevel: Math.max(0, ...board.filter(Boolean).map((tile) => tile!.level)),
     targetLevel: mode === 'challenge' ? 4 : 5,
-    targetScore: mode === 'challenge' ? 1800 : 2600,
+    targetScore: mode === 'challenge' ? 5000 : 2600,
     status: 'playing',
     undoRemaining: 3,
     history: [],
@@ -240,10 +235,10 @@ function hasAvailableMerge(board: (Tile | null)[], foldCabinet: number | null = 
 }
 
 function updateTutorial(step: number, action: GameAction, merged: number) {
-  if (merged > 0) return 4;
+  if (merged > 0) return Math.max(step, 4);
   if (step === 0) return 1;
   if (step === 1 && action.type === 'rotate') return 2;
-  if (step === 2 && action.type === 'fold') return 3;
+  if (step <= 2 && action.type === 'fold') return 3;
   return step;
 }
 
@@ -387,7 +382,7 @@ export function normalizeGameState(value: unknown, fallback: GameState): GameSta
     status,
     undoRemaining: typeof raw.undoRemaining === 'number' ? Math.max(0, Math.min(3, raw.undoRemaining)) : 3,
     history: Array.isArray(raw.history) ? raw.history.slice(-8) as Snapshot[] : [],
-    tutorialStep: typeof raw.tutorialStep === 'number' ? Math.max(0, Math.min(4, raw.tutorialStep)) : 0,
+    tutorialStep: typeof raw.tutorialStep === 'number' ? Math.max(0, Math.min(5, raw.tutorialStep)) : 0,
     lastAction: raw.lastAction === 'rotate' || raw.lastAction === 'fold' || raw.lastAction === 'undo' ? raw.lastAction : null,
     lastMerge: typeof raw.lastMerge === 'number' ? raw.lastMerge : 0,
     lastGained: typeof raw.lastGained === 'number' ? raw.lastGained : 0,

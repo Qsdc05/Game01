@@ -139,15 +139,16 @@ function Admin() {
 }
 
 function Tutorial({ state, onSkip }: { state: GameState; onSkip: () => void }) {
-  if (state.tutorialStep >= 4) return null;
+  if (state.tutorialStep >= 5) return null;
   const steps = [
-    ['01 / 04', '先选一个展柜', '点击棋盘里的任意展柜，查看它的边界。'],
-    ['02 / 04', '旋转空间', '选好展柜后，点顺时针或逆时针，让文物重新排列。'],
-    ['03 / 04', '折叠边界', '试试折叠边界，远处的展柜会短暂连在一起。'],
-    ['04 / 04', '完成第一次合成', '让三个同等级文物相遇，就能把它们合成为更珍贵的藏品。'],
+    ['01 / 05', '先选一个展柜', '点击 A、B、C、D 任意展柜，选中的区域会高亮。'],
+    ['02 / 05', '旋转四格空间', '用顺时针或逆时针旋转，让相同文物排成三枚相连。'],
+    ['03 / 05', '必要时折叠边界', '折叠会临时接通远处边缘，适合处理隔着展厅的文物。'],
+    ['04 / 05', '三枚相同即可合成', '合成会生成更高一级的文物，并补进一件新的低级藏品。'],
+    ['05 / 05', '继续完成本局目标', `达到 ${tileName(state.targetLevel)} 或 ${state.targetScore.toLocaleString()} 分即可修复展厅。`],
   ];
   const step = steps[Math.min(state.tutorialStep, steps.length - 1)];
-  return <div className="tutorial-card"><div className="tutorial-kicker">{step[0]}</div><strong>{step[1]}</strong><p>{step[2]}</p><button className="link" onClick={onSkip}>跳过教学</button></div>;
+  return <div className="tutorial-card"><div className="tutorial-kicker">{step[0]}</div><strong>{step[1]}</strong><p>{step[2]}</p><button className="link" onClick={onSkip}>我知道了，关闭提示</button></div>;
 }
 
 function CollectionCard({ unlocked, onOpen }: { unlocked: AchievementId[]; onOpen: () => void }) {
@@ -192,7 +193,7 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
       try {
         const stored = normalizeGameState(JSON.parse(data.save.payload), fallback);
         const currentChallenge = todaySeed();
-        const restored = stored.mode === 'challenge' && stored.seed !== currentChallenge ? fallback : stored;
+        const restored = stored.mode === 'challenge' && (stored.seed !== currentChallenge || stored.targetScore !== fallback.targetScore) ? fallback : stored;
         setState(restored);
         setMode(restored.mode);
       } catch {
@@ -249,7 +250,7 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
         <p className="eyebrow">{mode === 'challenge' ? 'DAILY CHALLENGE' : 'FREE EXHIBITION'}</p>
         <h1>{mode === 'challenge' ? '今日展柜' : '自由展览'}</h1>
         <p className="muted">{mode === 'challenge' ? `北京时区 · ${todayDate()}` : '练习空间折叠，不计入排行榜。'}</p>
-        <div className="goal-card"><div><small>本局目标</small><b>{state.targetLevel >= 4 ? '修复珍贵展品' : '完成展柜整理'}</b></div><strong>{progress}%</strong><div className="goal-track"><i style={{ width: `${progress}%` }} /></div><span>最高等级：{tileName(state.highestLevel)} · 目标：{tileName(state.targetLevel)}</span></div>
+        <div className="goal-card"><div><small>本局目标</small><b>{state.targetLevel >= 4 ? '修复珍贵展品' : '完成展柜整理'}</b></div><strong>{progress}%</strong><div className="goal-track"><i style={{ width: `${progress}%` }} /></div><span>最高等级：{tileName(state.highestLevel)} · 目标：{tileName(state.targetLevel)} 或 {state.targetScore.toLocaleString()} 分</span></div>
         <div className="score"><small>当前藏品价值</small><strong>{state.score.toLocaleString()}</strong><span>分</span></div>
         <div className="stats"><div><b>{Math.max(0, 30 - state.moves)}</b><small>剩余步数</small></div><div><b>×{state.chain}</b><small>连锁倍率</small></div><div><b>{state.undoRemaining}</b><small>撤销次数</small></div></div>
         <div className="mode-buttons"><button className={mode === 'challenge' ? 'selected' : ''} onClick={() => newGame('challenge')}>每日挑战</button><button className={mode === 'free' ? 'selected' : ''} onClick={() => newGame('free')}>自由模式</button></div>
@@ -268,8 +269,8 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
         </div>
         <div className="board-feedback" aria-live="polite"><span>{state.lastMessage}</span>{state.lastGained > 0 && <b>+{state.lastGained.toLocaleString()}</b>}</div>
         <div className="controls"><button disabled={state.gameOver || state.selectedCabinet === null} onClick={() => state.selectedCabinet !== null && perform({ type: 'rotate', cabinet: state.selectedCabinet, clockwise: false })}>↶ 逆时针</button><button className="primary" disabled={state.gameOver || state.selectedCabinet === null} onClick={() => state.selectedCabinet !== null && perform({ type: 'fold', cabinet: state.selectedCabinet })}>折叠边界</button><button disabled={state.gameOver || state.selectedCabinet === null} onClick={() => state.selectedCabinet !== null && perform({ type: 'rotate', cabinet: state.selectedCabinet, clockwise: true })}>顺时针 ↷</button></div>
-        <p className="hint">选择一个展柜，再旋转它。折叠边界会把棋盘的远端边缘临时接在一起。</p>
-        <Tutorial state={state} onSkip={() => saveState({ ...state, tutorialStep: 4, lastMessage: '教学已跳过，开始你的展柜整理。' })} />
+        <p className="hint">目标：让 3 件同等级文物相连并合成。先选展柜，再旋转；遇到远处的文物时使用折叠边界。</p>
+        <Tutorial state={state} onSkip={() => saveState({ ...state, tutorialStep: 5, lastMessage: '教学已关闭，开始你的展柜整理。' })} />
         {state.gameOver && <div className={`finished card ${state.status === 'won' ? 'finished-win' : ''}`}><p className="eyebrow">{state.status === 'won' ? 'EXHIBITION RESTORED' : 'EXHIBITION CLOSED'}</p><h2>{state.status === 'won' ? '展品修复完成' : '展览结束'}</h2><p>本次藏品价值 <b>{state.score.toLocaleString()}</b> 分 · 最高 {tileName(state.highestLevel)}</p><button className="primary" onClick={() => newGame(mode)}>再来一局</button></div>}
       </section>
     </main>}

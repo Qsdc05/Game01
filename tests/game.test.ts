@@ -19,6 +19,33 @@ describe('folding museum engine', () => {
     expect(next.gameOver).toBe(false);
   });
 
+  it('keeps the daily challenge playable after the first rotation', () => {
+    const game = createGame('challenge', 1468116650);
+    const firstMoves = [
+      { type: 'rotate' as const, cabinet: 0, clockwise: false },
+      { type: 'rotate' as const, cabinet: 1, clockwise: true },
+      { type: 'rotate' as const, cabinet: 2, clockwise: false },
+      { type: 'rotate' as const, cabinet: 3, clockwise: true },
+    ];
+    firstMoves.forEach((action) => {
+      const next = act(game, action);
+      expect(next.moves).toBe(1);
+      expect(next.gameOver).toBe(false);
+      expect(next.status).toBe('playing');
+    });
+  });
+
+  it('keeps the tutorial on screen after the first merge', () => {
+    const game = createGame('free', 42);
+    const board = Array.from({ length: 16 }, () => null);
+    board[0] = { id: 1, level: 0 };
+    board[1] = { id: 2, level: 0 };
+    board[4] = { id: 3, level: 0 };
+    const next = act({ ...game, board, highestLevel: 0 }, { type: 'rotate', cabinet: 0, clockwise: true });
+    expect(next.lastMerge).toBeGreaterThan(0);
+    expect(next.tutorialStep).toBe(4);
+  });
+
   it('merges three matching relics and awards feedback', () => {
     const game = createGame('free', 42);
     const board = Array.from({ length: 16 }, () => null);
@@ -55,13 +82,9 @@ describe('folding museum engine', () => {
 
   it('replays a completed challenge before accepting a leaderboard result', () => {
     const actions = [
+      { type: 'rotate' as const, cabinet: 1, clockwise: false },
       { type: 'fold' as const, cabinet: 0 },
-      { type: 'rotate' as const, cabinet: 1, clockwise: false },
       { type: 'rotate' as const, cabinet: 2, clockwise: true },
-      { type: 'fold' as const, cabinet: 3 },
-      { type: 'rotate' as const, cabinet: 0, clockwise: true },
-      { type: 'rotate' as const, cabinet: 1, clockwise: false },
-      { type: 'fold' as const, cabinet: 2 },
     ];
     const replayed = simulateChallenge(42, actions);
     expect(replayed.gameOver).toBe(true);
