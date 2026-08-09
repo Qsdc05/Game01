@@ -101,10 +101,14 @@ export default {
         const exists = await env.DB.prepare('SELECT id FROM users WHERE username=?').bind(body.username).first();
         if (exists) return json({ error: '用户名已存在' }, 409, request, env);
         const id = crypto.randomUUID();
-        await env.DB.batch([
+        const registration = await env.DB.batch([
           env.DB.prepare('INSERT INTO users VALUES (?,?,?,?)').bind(id, body.username, await passwordHash(body.password), now()),
           env.DB.prepare('UPDATE invite_codes SET used_by=?,used_at=? WHERE code=? AND used_by IS NULL AND revoked=0').bind(id, now(), body.invite),
         ]);
+        if ((registration[1]?.meta.changes ?? 0) !== 1) {
+          await env.DB.prepare('DELETE FROM users WHERE id=?').bind(id).run();
+          return json({ error: '邀请码刚刚被其他馆长使用，请换一个邀请码' }, 409, request, env);
+        }
         return json({ ok: true }, 201, request, env);
       }
 
