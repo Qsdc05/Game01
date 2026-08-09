@@ -43,6 +43,7 @@ export type GameState = {
   history: Snapshot[];
   tutorialStep: number;
   lastAction: 'rotate' | 'fold' | 'undo' | null;
+  lastRotation: 'clockwise' | 'counterclockwise' | null;
   lastMerge: number;
   lastGained: number;
   lastSpawnId: number | null;
@@ -137,6 +138,7 @@ export function createGame(mode: Mode = 'free', seed = Date.now()): GameState {
     history: [],
     tutorialStep: 0,
     lastAction: null,
+    lastRotation: null,
     lastMerge: 0,
     lastGained: 0,
     lastSpawnId: null,
@@ -251,6 +253,7 @@ export function selectCabinet(state: GameState, cabinet: number): GameState {
     lastMerge: 0,
     lastGained: 0,
     lastSpawnId: null,
+    lastRotation: null,
     lastUnlocked: null,
     lastMessage: `已选中展柜 ${String.fromCharCode(65 + cabinet)}，现在试试旋转。`,
   };
@@ -325,6 +328,7 @@ export function act(state: GameState, action: GameAction): GameState {
     history,
     tutorialStep: updateTutorial(state.tutorialStep, action, merged),
     lastAction: action.type,
+    lastRotation: action.type === 'rotate' ? (action.clockwise ? 'clockwise' : 'counterclockwise') : null,
     lastMerge: merged,
     lastGained: gained,
     lastSpawnId: spawnId,
@@ -349,6 +353,7 @@ export function undoGame(state: GameState): GameState {
     history: state.history.slice(0, -1),
     undoRemaining: state.undoRemaining - 1,
     lastAction: 'undo',
+    lastRotation: null,
     lastMerge: 0,
     lastGained: 0,
     lastSpawnId: null,
@@ -384,6 +389,7 @@ export function normalizeGameState(value: unknown, fallback: GameState): GameSta
     history: Array.isArray(raw.history) ? raw.history.slice(-8) as Snapshot[] : [],
     tutorialStep: typeof raw.tutorialStep === 'number' ? Math.max(0, Math.min(5, raw.tutorialStep)) : 0,
     lastAction: raw.lastAction === 'rotate' || raw.lastAction === 'fold' || raw.lastAction === 'undo' ? raw.lastAction : null,
+    lastRotation: raw.lastRotation === 'clockwise' || raw.lastRotation === 'counterclockwise' ? raw.lastRotation : null,
     lastMerge: typeof raw.lastMerge === 'number' ? raw.lastMerge : 0,
     lastGained: typeof raw.lastGained === 'number' ? raw.lastGained : 0,
     lastSpawnId: typeof raw.lastSpawnId === 'number' ? raw.lastSpawnId : null,

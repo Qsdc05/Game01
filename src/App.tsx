@@ -178,6 +178,7 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [showCollection, setShowCollection] = useState(false);
+  const [rotationPulse, setRotationPulse] = useState(0);
   const submitted = useRef<string | null>(null);
 
   useEffect(() => {
@@ -224,6 +225,7 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
   const perform = (action: Parameters<typeof act>[1]) => {
     const next = act(state, action);
     if (next === state) return;
+    if (next.lastRotation) setRotationPulse((pulse) => pulse + 1);
     saveState(next);
   };
   const undo = () => {
@@ -239,6 +241,8 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
   };
   const logout = () => { api('/api/auth/logout', { method: 'POST' }).finally(onLogout); };
   const progress = Math.min(100, Math.round((state.highestLevel / state.targetLevel) * 100));
+  const lastLoggedAction = state.actionLog[state.actionLog.length - 1];
+  const focusCabinet = state.selectedCabinet ?? (lastLoggedAction && 'cabinet' in lastLoggedAction ? lastLoggedAction.cabinet : null);
 
   if (loading) return <div className="loading-screen"><span className="status-dot" /> 正在恢复云端展柜…</div>;
   return <div className="app museum-app">
@@ -259,17 +263,18 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
       </aside>
       <section className="board-wrap">
         <div className="board-head"><span>展柜 A · B · C · D</span><span className={saved ? 'saved' : 'unsaved'}>{saved ? '● 云端已保存' : '○ 保存中...'}</span></div>
-        <div className={`board ${state.lastAction ? `action-${state.lastAction}` : ''}`}>
+        <div className={`board ${state.lastAction ? `action-${state.lastAction}` : ''}${state.lastRotation ? ` rotation-${state.lastRotation}` : ''} rotation-pulse-${rotationPulse % 2}`}>
           {state.board.map((tile, index) => {
             const cabinet = Math.floor(index / 4 / 2) * 2 + Math.floor((index % 4) / 2);
             const selected = state.selectedCabinet === cabinet;
             const className = `tile ${index % 2 === 1 || Math.floor(index / 4) % 2 === 1 ? 'cabinet-edge' : ''}${selected ? ' selected' : ''}${tile && state.lastSpawnId === tile.id ? ' tile-spawn' : ''}${tile && state.lastMerge > 0 ? ' tile-merge' : ''}`;
             return <button className={className} key={`${index}-${tile?.id ?? 'empty'}-${tile?.level ?? 0}`} style={{ background: tile ? tileColor(tile.level) : 'transparent' }} onClick={() => chooseCabinet(cabinet)} aria-label={`展柜 ${String.fromCharCode(65 + cabinet)} ${tile ? tileName(tile.level) : '空位'}`}><span className="cabinet-mark">{String.fromCharCode(65 + cabinet)}</span>{tile && <><span className="tile-icon">{tileIcon(tile.level)}</span><small>{tileName(tile.level)}</small></>}</button>;
           })}
+          {focusCabinet !== null && <div className="cabinet-map" aria-hidden="true"><span className={`cabinet-focus cabinet-focus-${focusCabinet}`} key={rotationPulse}><span className="direction-glyph">{state.lastRotation === 'counterclockwise' ? '↺' : '↻'}</span><b>展柜 {String.fromCharCode(65 + focusCabinet)}</b><small>{state.lastRotation === 'clockwise' ? '顺时针 90°' : state.lastRotation === 'counterclockwise' ? '逆时针 90°' : '选择旋转方向'}</small></span></div>}
         </div>
-        <div className="board-feedback" aria-live="polite"><span>{state.lastMessage}</span>{state.lastGained > 0 && <b>+{state.lastGained.toLocaleString()}</b>}</div>
-        <div className="controls"><button disabled={state.gameOver || state.selectedCabinet === null} onClick={() => state.selectedCabinet !== null && perform({ type: 'rotate', cabinet: state.selectedCabinet, clockwise: false })}>↶ 逆时针</button><button className="primary" disabled={state.gameOver || state.selectedCabinet === null} onClick={() => state.selectedCabinet !== null && perform({ type: 'fold', cabinet: state.selectedCabinet })}>折叠边界</button><button disabled={state.gameOver || state.selectedCabinet === null} onClick={() => state.selectedCabinet !== null && perform({ type: 'rotate', cabinet: state.selectedCabinet, clockwise: true })}>顺时针 ↷</button></div>
-        <p className="hint">目标：让 3 件同等级文物相连并合成。先选展柜，再旋转；遇到远处的文物时使用折叠边界。</p>
+        <div className="board-feedback" aria-live="polite"><span>{state.lastMessage}</span>{state.lastRotation && focusCabinet !== null && <small className="rotation-feedback">展柜 {String.fromCharCode(65 + focusCabinet)} 已{state.lastRotation === 'clockwise' ? '顺时针' : '逆时针'}旋转 90°</small>}{state.lastGained > 0 && <b>+{state.lastGained.toLocaleString()}</b>}</div>
+        <div className="controls"><button disabled={state.gameOver || state.selectedCabinet === null} aria-label="逆时针旋转当前展柜" onClick={() => state.selectedCabinet !== null && perform({ type: 'rotate', cabinet: state.selectedCabinet, clockwise: false })}><span className="control-icon">↺</span><span className="control-copy"><b>逆时针</b><small>左转 90°</small></span></button><button className="primary" disabled={state.gameOver || state.selectedCabinet === null} aria-label="折叠当前展柜边界" onClick={() => state.selectedCabinet !== null && perform({ type: 'fold', cabinet: state.selectedCabinet })}><span className="control-icon">⌁</span><span className="control-copy"><b>折叠边界</b><small>临时连接远端</small></span></button><button disabled={state.gameOver || state.selectedCabinet === null} aria-label="顺时针旋转当前展柜" onClick={() => state.selectedCabinet !== null && perform({ type: 'rotate', cabinet: state.selectedCabinet, clockwise: true })}><span className="control-icon">↻</span><span className="control-copy"><b>顺时针</b><small>右转 90°</small></span></button></div>
+        <p className="hint"><b>怎么玩：</b>先点选一个展柜，四格区域会高亮；再点左转或右转。让 3 件相同文物相连，它们会自动合成。隔得太远时，再试试“折叠边界”。</p>
         <Tutorial state={state} onSkip={() => saveState({ ...state, tutorialStep: 5, lastMessage: '教学已关闭，开始你的展柜整理。' })} />
         {state.gameOver && <div className={`finished card ${state.status === 'won' ? 'finished-win' : ''}`}><p className="eyebrow">{state.status === 'won' ? 'EXHIBITION RESTORED' : 'EXHIBITION CLOSED'}</p><h2>{state.status === 'won' ? '展品修复完成' : '展览结束'}</h2><p>本次藏品价值 <b>{state.score.toLocaleString()}</b> 分 · 最高 {tileName(state.highestLevel)}</p><button className="primary" onClick={() => newGame(mode)}>再来一局</button></div>}
       </section>

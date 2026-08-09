@@ -19,6 +19,12 @@ describe('folding museum engine', () => {
     expect(next.gameOver).toBe(false);
   });
 
+  it('records the rotation direction for visual feedback', () => {
+    const game = createGame('free', 42);
+    expect(act(game, { type: 'rotate', cabinet: 0, clockwise: true }).lastRotation).toBe('clockwise');
+    expect(act(game, { type: 'rotate', cabinet: 0, clockwise: false }).lastRotation).toBe('counterclockwise');
+  });
+
   it('keeps the daily challenge playable after the first rotation', () => {
     const game = createGame('challenge', 1468116650);
     const firstMoves = [
