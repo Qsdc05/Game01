@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { act, createGame, normalizeGameState, todaySeed, undoGame } from '../src/game';
+import { act, createGame, normalizeGameState, simulateChallenge, todaySeed, undoGame, validateChallengeResult } from '../src/game';
 
 describe('folding museum engine', () => {
   it('creates deterministic daily boards within Beijing date', () => {
@@ -29,6 +29,7 @@ describe('folding museum engine', () => {
     expect(next.lastMerge).toBeGreaterThan(0);
     expect(next.lastGained).toBeGreaterThan(0);
     expect(next.highestLevel).toBeGreaterThanOrEqual(1);
+    expect(next.unlocked).toContain('first_merge');
   });
 
   it('uses a folded edge to connect distant relics', () => {
@@ -39,6 +40,7 @@ describe('folding museum engine', () => {
     board[12] = { id: 3, level: 0 };
     const next = act({ ...game, board, highestLevel: 0 }, { type: 'fold', cabinet: 0 });
     expect(next.lastMerge).toBeGreaterThan(0);
+    expect(next.unlocked).toContain('folded_space');
   });
 
   it('undoes the latest move and consumes one undo charge', () => {
@@ -51,12 +53,30 @@ describe('folding museum engine', () => {
     expect(restored.lastAction).toBe('undo');
   });
 
+  it('replays a completed challenge before accepting a leaderboard result', () => {
+    const actions = [
+      { type: 'fold' as const, cabinet: 0 },
+      { type: 'rotate' as const, cabinet: 1, clockwise: false },
+      { type: 'rotate' as const, cabinet: 2, clockwise: true },
+      { type: 'fold' as const, cabinet: 3 },
+      { type: 'rotate' as const, cabinet: 0, clockwise: true },
+      { type: 'rotate' as const, cabinet: 1, clockwise: false },
+      { type: 'fold' as const, cabinet: 2 },
+    ];
+    const replayed = simulateChallenge(42, actions);
+    expect(replayed.gameOver).toBe(true);
+    expect(validateChallengeResult(42, actions, replayed)).toBe(true);
+    expect(validateChallengeResult(42, actions, { ...replayed, score: replayed.score + 1 })).toBe(false);
+  });
+
   it('keeps a valid state shape after restoring a legacy save', () => {
     const game = createGame('challenge', 42);
     const legacy = { board: game.board, score: 20, moves: 2, mode: 'challenge', seed: 42 };
     const normalized = normalizeGameState(legacy, game);
     expect(normalized.targetLevel).toBeGreaterThan(0);
     expect(normalized.history).toEqual([]);
+    expect(normalized.actionLog).toEqual([]);
+    expect(normalized.unlocked).toEqual([]);
     expect(normalized.gameOver).toBe(false);
   });
 });

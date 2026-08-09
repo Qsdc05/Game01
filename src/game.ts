@@ -4,6 +4,16 @@ export type GameStatus = 'playing' | 'won' | 'lost';
 export type GameAction =
   | { type: 'rotate'; cabinet: number; clockwise: boolean }
   | { type: 'fold'; cabinet: number };
+export type ReplayAction = GameAction | { type: 'undo' };
+export type AchievementId = 'first_merge' | 'folded_space' | 'combo_keeper' | 'masterpiece' | 'restored';
+
+export const ACHIEVEMENTS: Array<{ id: AchievementId; name: string; description: string; icon: string }> = [
+  { id: 'first_merge', name: '初次共鸣', description: '完成第一次合成', icon: '✦' },
+  { id: 'folded_space', name: '空间折叠', description: '通过折叠边界完成合成', icon: '⌁' },
+  { id: 'combo_keeper', name: '连锁守护者', description: '达到 ×3 连锁倍率', icon: '∞' },
+  { id: 'masterpiece', name: '价值发现', description: '单局达到 1000 分', icon: '◇' },
+  { id: 'restored', name: '修复展厅', description: '完成一局挑战', icon: '♛' },
+];
 
 type Snapshot = {
   board: (Tile | null)[];
@@ -13,6 +23,7 @@ type Snapshot = {
   highestLevel: number;
   status: GameStatus;
   tutorialStep: number;
+  actionLog: ReplayAction[];
 };
 
 export type GameState = {
@@ -36,6 +47,9 @@ export type GameState = {
   lastGained: number;
   lastSpawnId: number | null;
   lastMessage: string;
+  actionLog: ReplayAction[];
+  unlocked: AchievementId[];
+  lastUnlocked: AchievementId | null;
 };
 
 export const MAX_MOVES = 30;
@@ -96,6 +110,7 @@ function snapshot(state: GameState): Snapshot {
     highestLevel: state.highestLevel,
     status: state.status,
     tutorialStep: state.tutorialStep,
+    actionLog: [...state.actionLog],
   };
 }
 
@@ -131,6 +146,9 @@ export function createGame(mode: Mode = 'free', seed = Date.now()): GameState {
     lastGained: 0,
     lastSpawnId: null,
     lastMessage: '先选择一个展柜，看看里面藏着什么。',
+    actionLog: [],
+    unlocked: [],
+    lastUnlocked: null,
   };
 }
 
@@ -242,6 +260,17 @@ export function selectCabinet(state: GameState, cabinet: number): GameState {
   };
 }
 
+function unlockAchievements(state: GameState, action: GameAction, merged: number, chain: number, score: number, status: GameStatus) {
+  const unlocked = new Set(state.unlocked);
+  if (merged > 0) unlocked.add('first_merge');
+  if (action.type === 'fold' && merged > 0) unlocked.add('folded_space');
+  if (chain >= 3) unlocked.add('combo_keeper');
+  if (score >= 1000) unlocked.add('masterpiece');
+  if (status === 'won' && state.mode === 'challenge') unlocked.add('restored');
+  const next = [...unlocked];
+  return { unlocked: next, lastUnlocked: next.find((id) => !state.unlocked.includes(id)) ?? null };
+}
+
 export function act(state: GameState, action: GameAction): GameState {
   if (state.gameOver) return state;
   const history = [...state.history, snapshot(state)].slice(-8);
@@ -276,8 +305,11 @@ export function act(state: GameState, action: GameAction): GameState {
   const outOfMoves = state.moves + 1 >= MAX_MOVES;
   const blocked = empty.length === 0 && !hasAvailableMerge(board);
   const status: GameStatus = targetReached ? 'won' : outOfMoves || blocked ? 'lost' : 'playing';
-  const message = targetReached
-    ? '目标达成！这件文物可以进入镇馆展厅。'
+  const achievementState = unlockAchievements(state, action, merged, Math.min(state.chain + cascade, 9), score, status);
+  const message = achievementState.lastUnlocked
+    ? `解锁馆藏成就：${ACHIEVEMENTS.find((item) => item.id === achievementState.lastUnlocked)?.name ?? '新发现'}。`
+    : targetReached
+      ? '目标达成！这件文物可以进入镇馆展厅。'
     : merged
       ? `发现 ${merged} 组共鸣，连锁 ×${Math.min(state.chain + cascade, 9)}！`
       : action.type === 'fold'
@@ -301,6 +333,9 @@ export function act(state: GameState, action: GameAction): GameState {
     lastGained: gained,
     lastSpawnId: spawnId,
     lastMessage: message,
+    actionLog: [...state.actionLog, action],
+    unlocked: achievementState.unlocked,
+    lastUnlocked: achievementState.lastUnlocked,
   };
 }
 
@@ -322,6 +357,7 @@ export function undoGame(state: GameState): GameState {
     lastGained: 0,
     lastSpawnId: null,
     lastMessage: '已回到上一步，重新规划你的展柜。',
+    actionLog: [...state.actionLog, { type: 'undo' }],
   };
 }
 
@@ -356,5 +392,36 @@ export function normalizeGameState(value: unknown, fallback: GameState): GameSta
     lastGained: typeof raw.lastGained === 'number' ? raw.lastGained : 0,
     lastSpawnId: typeof raw.lastSpawnId === 'number' ? raw.lastSpawnId : null,
     lastMessage: typeof raw.lastMessage === 'string' ? raw.lastMessage : fallback.lastMessage,
+    actionLog: Array.isArray(raw.actionLog) ? raw.actionLog.filter(isReplayAction).slice(-120) : [],
+    unlocked: Array.isArray(raw.unlocked) ? raw.unlocked.filter((id): id is AchievementId => ACHIEVEMENTS.some((item) => item.id === id)) : [],
+    lastUnlocked: typeof raw.lastUnlocked === 'string' && ACHIEVEMENTS.some((item) => item.id === raw.lastUnlocked) ? raw.lastUnlocked as AchievementId : null,
   };
+}
+
+function isReplayAction(value: unknown): value is ReplayAction {
+  if (!value || typeof value !== 'object') return false;
+  const action = value as Partial<ReplayAction>;
+  if (action.type === 'undo') return true;
+  return (action.type === 'rotate' && typeof action.cabinet === 'number' && Number.isInteger(action.cabinet) && action.cabinet >= 0 && action.cabinet <= 3 && typeof action.clockwise === 'boolean')
+    || (action.type === 'fold' && typeof action.cabinet === 'number' && Number.isInteger(action.cabinet) && action.cabinet >= 0 && action.cabinet <= 3);
+}
+
+export function validateChallengeResult(seed: number, actions: ReplayAction[], expected: { score: number; moves: number; highestLevel: number }) {
+  if (!Number.isInteger(seed) || actions.length < 1 || actions.length > 120) return false;
+  if (!actions.every(isReplayAction)) return false;
+  const replayed = simulateChallenge(seed, actions);
+  return replayed.actionLog.length === actions.length
+    && replayed.gameOver
+    && replayed.score === expected.score
+    && replayed.moves === expected.moves
+    && replayed.highestLevel === expected.highestLevel;
+}
+
+export function simulateChallenge(seed: number, actions: ReplayAction[]) {
+  let state = createGame('challenge', seed);
+  for (const action of actions) {
+    if (action.type === 'undo') state = undoGame(state);
+    else state = act(state, action);
+  }
+  return state;
 }

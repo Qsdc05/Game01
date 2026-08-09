@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  ACHIEVEMENTS,
   act,
   createGame,
   normalizeGameState,
@@ -10,6 +11,7 @@ import {
   todayDate,
   todaySeed,
   undoGame,
+  type AchievementId,
   type GameState,
   type Mode,
 } from './game';
@@ -146,6 +148,14 @@ function Tutorial({ state, onSkip }: { state: GameState; onSkip: () => void }) {
   return <div className="tutorial-card"><div className="tutorial-kicker">{step[0]}</div><strong>{step[1]}</strong><p>{step[2]}</p><button className="link" onClick={onSkip}>跳过教学</button></div>;
 }
 
+function CollectionCard({ unlocked, onOpen }: { unlocked: AchievementId[]; onOpen: () => void }) {
+  return <button className="collection-card" onClick={onOpen}><div className="collection-top"><span className="eyebrow">CURATOR'S NOTEBOOK</span><strong>{unlocked.length}/{ACHIEVEMENTS.length}</strong></div><b>馆藏发现</b><div className="collection-pips">{ACHIEVEMENTS.map((item) => <i className={unlocked.includes(item.id) ? 'unlocked' : ''} key={item.id}>{item.icon}</i>)}</div><small>完成成就，留下你的博物馆痕迹 →</small></button>;
+}
+
+function CollectionModal({ unlocked, onClose }: { unlocked: AchievementId[]; onClose: () => void }) {
+  return <div className="modal-backdrop" role="presentation" onClick={onClose}><section className="collection-modal card" role="dialog" aria-modal="true" aria-label="馆藏图鉴" onClick={(event) => event.stopPropagation()}><div className="modal-heading"><div><p className="eyebrow">CURATOR'S NOTEBOOK</p><h2>馆藏图鉴</h2></div><button className="modal-close" onClick={onClose}>×</button></div><p className="muted">每一次合成都会留下记录。成就会跟随云端存档跨设备保留。</p><div className="achievement-list">{ACHIEVEMENTS.map((item) => <div className={`achievement-row ${unlocked.includes(item.id) ? 'is-unlocked' : ''}`} key={item.id}><span>{unlocked.includes(item.id) ? item.icon : '·'}</span><div><b>{item.name}</b><small>{item.description}</small></div><em>{unlocked.includes(item.id) ? '已发现' : '待发现'}</em></div>)}</div></section></div>;
+}
+
 function Leaderboard({ period, setPeriod }: { period: 'daily' | 'weekly' | 'all'; setPeriod: (value: 'daily' | 'weekly' | 'all') => void }) {
   const [items, setItems] = useState<RankItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,6 +174,7 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
   const [saved, setSaved] = useState(true);
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showCollection, setShowCollection] = useState(false);
   const submitted = useRef<string | null>(null);
 
   useEffect(() => {
@@ -203,7 +214,7 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
     const key = `${state.seed}:${state.moves}:${state.score}`;
     if (submitted.current === key) return;
     submitted.current = key;
-    api('/api/scores', { method: 'POST', body: JSON.stringify({ score: state.score, moves: state.moves, highestLevel: state.highestLevel, challengeDate: todayDate(), challengeVersion: 1 }) }).then(() => setNotice(state.status === 'won' ? '目标达成，成绩已进入今日排行榜。' : '本局结束，成绩已记录到今日排行榜。')).catch(() => setNotice('本局结束，但成绩提交失败。'));
+    api('/api/scores', { method: 'POST', body: JSON.stringify({ score: state.score, moves: state.moves, highestLevel: state.highestLevel, actions: state.actionLog, challengeDate: todayDate(), challengeVersion: 1 }) }).then(() => setNotice(state.status === 'won' ? '目标达成，成绩已进入今日排行榜。' : '本局结束，成绩已记录到今日排行榜。')).catch(() => setNotice('本局结束，但成绩提交失败。'));
   }, [loading, state]);
 
   const chooseCabinet = (cabinet: number) => saveState(selectCabinet(state, cabinet));
@@ -218,7 +229,7 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
     saveState(next);
   };
   const newGame = (nextMode: Mode) => {
-    const next = createGame(nextMode, nextMode === 'challenge' ? todaySeed() : Date.now());
+    const next = { ...createGame(nextMode, nextMode === 'challenge' ? todaySeed() : Date.now()), unlocked: state.unlocked };
     setNotice(nextMode === 'challenge' ? '今日地图已准备好，所有馆长面对同一座展柜。' : '自由展览已开启，不计入排行榜。');
     saveState(next);
     setTab('game');
@@ -241,6 +252,7 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
         <div className="stats"><div><b>{Math.max(0, 30 - state.moves)}</b><small>剩余步数</small></div><div><b>×{state.chain}</b><small>连锁倍率</small></div><div><b>{state.undoRemaining}</b><small>撤销次数</small></div></div>
         <div className="mode-buttons"><button className={mode === 'challenge' ? 'selected' : ''} onClick={() => newGame('challenge')}>每日挑战</button><button className={mode === 'free' ? 'selected' : ''} onClick={() => newGame('free')}>自由模式</button></div>
         <button className="undo-button" disabled={state.gameOver || state.undoRemaining <= 0 || state.history.length === 0} onClick={undo}>↶ 撤销上一步 <span>{state.undoRemaining} 次可用</span></button>
+        <CollectionCard unlocked={state.unlocked} onOpen={() => setShowCollection(true)} />
       </aside>
       <section className="board-wrap">
         <div className="board-head"><span>展柜 A · B · C · D</span><span className={saved ? 'saved' : 'unsaved'}>{saved ? '● 云端已保存' : '○ 保存中...'}</span></div>
@@ -259,6 +271,7 @@ function GameRoom({ user, onLogout }: { user: string; onLogout: () => void }) {
         {state.gameOver && <div className={`finished card ${state.status === 'won' ? 'finished-win' : ''}`}><p className="eyebrow">{state.status === 'won' ? 'EXHIBITION RESTORED' : 'EXHIBITION CLOSED'}</p><h2>{state.status === 'won' ? '展品修复完成' : '展览结束'}</h2><p>本次藏品价值 <b>{state.score.toLocaleString()}</b> 分 · 最高 {tileName(state.highestLevel)}</p><button className="primary" onClick={() => newGame(mode)}>再来一局</button></div>}
       </section>
     </main>}
+    {showCollection && <CollectionModal unlocked={state.unlocked} onClose={() => setShowCollection(false)} />}
   </div>;
 }
 
