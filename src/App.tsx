@@ -17,7 +17,9 @@ import {
 } from './game';
 import './styles.css';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? 'https://folding-museum-api.15770739466lfh.workers.dev' : '');
 
 async function api(path: string, init?: RequestInit) {
   const response = await fetch(`${API}${path}`, {
